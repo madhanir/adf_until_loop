@@ -1,0 +1,205 @@
+{
+    "name": "Until_Loop_Pipeline",
+    "properties": {
+        "description": "Pipeline iterates for each month from January of the current year till the previous month and executes the required activity/set of activities for the month",
+        "activities": [
+            {
+                "name": "Calculate Run Date",
+                "description": "Activity to calculate the run date",
+                "type": "SetVariable",
+                "dependsOn": [],
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "RunDate",
+                    "value": {
+                        "value": "@if(\nequals(length(pipeline().parameters.ScheduleDate), 10), \npipeline().parameters.ScheduleDate, \nformatDateTime(convertFromUtc(pipeline().parameters.ScheduleDate, 'India Standard Time'), 'yyyy-MM-dd')\n)",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "Set Initial Job Start Date",
+                "description": "Set initial job start date",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "Calculate Pipeline End Date",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "JobStartDate",
+                    "value": {
+                        "value": "@variables('PipelineStartDate')",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "Calculate Pipeline End Date",
+                "description": "Activity to calculate the pipeline end date",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "Calculate Pipeline Start Date",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "PipelineEndDate",
+                    "value": {
+                        "value": "@adddays(startOfMonth(variables('RunDate')), -1, 'yyyy-MM-dd')",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "Calculate Pipeline Start Date",
+                "description": "Activity to calculate the pipeline start date",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "Calculate Run Date",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "PipelineStartDate",
+                    "value": {
+                        "value": "@adddays(startOfMonth(variables('RunDate')), -1, 'yyyy-01-01')",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "Execution Loop",
+                "description": "Execute activity/set of activities in loop for each month between pipeline start and end date",
+                "type": "Until",
+                "dependsOn": [
+                    {
+                        "activity": "Set Initial Job Start Date",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@or(not(less(formatDateTime(variables('JobStartDate')), formatDateTime(variables('PipelineEndDate')))), variables('LoopFailure'))",
+                        "type": "Expression"
+                    },
+                    "activities": [
+                        {
+                            "name": "Calculate Job End Date",
+                            "description": "Activity to calculate the job end date for current iteration",
+                            "type": "SetVariable",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "JobEndDate",
+                                "value": {
+                                    "value": "@adddays(startOfMonth(addToTime(variables('JobStartDate'), 1, 'Month')), -1, 'yyyy-MM-dd')",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Calculate Job Start Date",
+                            "description": "Activity to calculate the job start date for next iteration",
+                            "type": "SetVariable",
+                            "dependsOn": [
+                                {
+                                    "activity": "Actual Activity",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "JobStartDate",
+                                "value": {
+                                    "value": "@adddays(variables('JobEndDate'), 1, 'yyyy-MM-dd')",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Set Loop Failure Variable",
+                            "description": "Activity to set loop failure Variable so that the next iteration is not executed",
+                            "type": "SetVariable",
+                            "dependsOn": [
+                                {
+                                    "activity": "Actual Activity",
+                                    "dependencyConditions": [
+                                        "Failed"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "LoopFailure",
+                                "value": true
+                            }
+                        },
+                        {
+                            "name": "Actual Activity",
+                            "description": "This should be replaced with the actual activity/set of activities which you want to perform",
+                            "type": "Wait",
+                            "dependsOn": [
+                                {
+                                    "activity": "Calculate Job End Date",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "waitTimeInSeconds": 10
+                            }
+                        }
+                    ],
+                    "timeout": "0.12:00:00"
+                }
+            }
+        ],
+        "parameters": {
+            "ScheduleDate": {
+                "type": "string"
+            }
+        },
+        "variables": {
+            "RunDate": {
+                "type": "String"
+            },
+            "JobStartDate": {
+                "type": "String"
+            },
+            "JobEndDate": {
+                "type": "String"
+            },
+            "PipelineStartDate": {
+                "type": "String"
+            },
+            "PipelineEndDate": {
+                "type": "String"
+            },
+            "LoopFailure": {
+                "type": "Boolean",
+                "defaultValue": false
+            }
+        },
+        "annotations": []
+    }
+}
